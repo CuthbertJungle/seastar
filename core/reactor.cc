@@ -103,6 +103,9 @@ using namespace net;
 seastar::logger seastar_logger("seastar");
 
 std::atomic<lowres_clock::rep> lowres_clock::_now;
+typename std::chrono::system_clock::duration const lowres_system_clock::_base =
+        std::chrono::system_clock::now().time_since_epoch();
+typename lowres_clock::duration lowres_system_clock::_ref;
 std::atomic<manual_clock::rep> manual_clock::_now;
 constexpr std::chrono::milliseconds lowres_clock::_granularity;
 
@@ -123,6 +126,10 @@ void lowres_clock::update() {
     auto now = steady_clock_type::now();
     auto ticks = duration_cast<milliseconds>(now.time_since_epoch()).count();
     _now.store(ticks, std::memory_order_relaxed);
+}
+
+lowres_system_clock::lowres_system_clock() {
+    _ref = lowres_clock::now().time_since_epoch();
 }
 
 template <typename T>
@@ -3719,6 +3726,8 @@ void smp::configure(boost::program_options::variables_map configuration)
 
     engine().configure(configuration);
     engine()._lowres_clock = std::make_unique<lowres_clock>();
+    // The constructor is accessible by this class, but not the specialization of `std::make_unique`.
+    engine()._lowres_system_clock = std::unique_ptr<lowres_system_clock>(new lowres_system_clock());
 }
 
 bool smp::poll_queues() {

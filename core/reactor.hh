@@ -72,6 +72,7 @@
 #include "condition-variable.hh"
 #include "util/log.hh"
 #include "lowres_clock.hh"
+#include "lowres_system_clock.hh"
 #include "manual_clock.hh"
 #include "core/metrics_registration.hh"
 
@@ -730,8 +731,9 @@ private:
     /// otherwise. This function should be used by a handler to return early if a task appears.
     idle_cpu_handler _idle_cpu_handler{ [] (work_waiting_on_reactor) {return idle_cpu_handler_result::no_more_work;} };
     std::unique_ptr<network_stack> _network_stack;
-    // _lowres_clock will only be created on cpu 0
+    // _lowres_clock and _lowres_system_clock will only be created on cpu 0
     std::unique_ptr<lowres_clock> _lowres_clock;
+    std::unique_ptr<lowres_system_clock> _lowres_system_clock;
     lowres_clock::time_point _lowres_next_timeout;
     std::experimental::optional<poller> _epoll_poller;
     std::experimental::optional<pollable_fd> _aio_eventfd;
