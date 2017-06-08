@@ -27,7 +27,7 @@
 #include <exception>
 #include "timer.hh"
 #include "future-util.hh"
-#include "lowres_clock.hh"
+#include "lowres_clocks.hh"
 
 namespace seastar {
 

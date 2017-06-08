@@ -30,7 +30,7 @@
 #include <boost/variant.hpp>
 #include "core/timer.hh"
 #include "core/simple-stream.hh"
-#include "core/lowres_clock.hh"
+#include "core/lowres_clocks.hh"
 
 namespace seastar {
 

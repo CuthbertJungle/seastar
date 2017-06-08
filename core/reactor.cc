@@ -102,27 +102,12 @@ using namespace net;
 
 seastar::logger seastar_logger("seastar");
 
-std::atomic<lowres_clock::rep> lowres_clock::_now;
 std::atomic<manual_clock::rep> manual_clock::_now;
-constexpr std::chrono::milliseconds lowres_clock::_granularity;
 
 timespec to_timespec(steady_clock_type::time_point t) {
     using ns = std::chrono::nanoseconds;
     auto n = std::chrono::duration_cast<ns>(t.time_since_epoch()).count();
     return { n / 1'000'000'000, n % 1'000'000'000 };
-}
-
-lowres_clock::lowres_clock() {
-    update();
-    _timer.set_callback(&lowres_clock::update);
-    _timer.arm_periodic(_granularity);
-}
-
-void lowres_clock::update() {
-    using namespace std::chrono;
-    auto now = steady_clock_type::now();
-    auto ticks = duration_cast<milliseconds>(now.time_since_epoch()).count();
-    _now.store(ticks, std::memory_order_relaxed);
 }
 
 template <typename T>
@@ -3718,7 +3703,8 @@ void smp::configure(boost::program_options::variables_map configuration)
     inited.wait();
 
     engine().configure(configuration);
-    engine()._lowres_clock = std::make_unique<lowres_clock>();
+    engine()._lowres_clock = std::make_unique<lowres_clock>(lowres_clock::token);
+    engine()._lowres_system_clock = std::make_unique<lowres_system_clock>(lowres_system_clock::token);
 }
 
 bool smp::poll_queues() {
