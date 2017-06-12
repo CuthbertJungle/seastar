@@ -21,36 +21,131 @@
 
 #pragma once
 
-#include <chrono>
-#include <atomic>
 #include "timer.hh"
+
+#include <atomic>
+#include <chrono>
+#include <ratio>
 
 namespace seastar {
 
-class lowres_clock {
-public:
-    typedef int64_t rep;
-    // The lowres_clock's resolution is 10ms. However, to make it is easier to
-    // do calcuations with std::chrono::milliseconds, we make the clock's
-    // period to 1ms instead of 10ms.
-    typedef std::ratio<1, 1000> period;
-    typedef std::chrono::duration<rep, period> duration;
-    typedef std::chrono::time_point<lowres_clock, duration> time_point;
-    lowres_clock();
-    static time_point now() {
-        auto nr = _now.load(std::memory_order_relaxed);
-        return time_point(duration(nr));
-    }
+class lowres_clock_impl final {
 private:
-    static void update();
-    // _now is updated by cpu0 and read by other cpus. Make _now on its own
+    //
+    // To prevent construction except by friends.
+    //
+
+    struct private_token final {};
+    static constexpr private_token token{};
+
+public:
+    using system_clock = std::chrono::system_clock;
+    using steady_clock = std::chrono::steady_clock;
+
+    using system_rep = typename system_clock::rep;
+    using steady_rep = typename steady_clock::rep;
+
+    template<class TimePoint>
+    inline static TimePoint system_now() {
+        return convert_count_to_time_point<TimePoint, system_clock>(_system_count.load(std::memory_order_relaxed));
+    }
+
+    template<class TimePoint>
+    inline static TimePoint steady_now() {
+        return convert_count_to_time_point<TimePoint, steady_clock>(_steady_count.load(std::memory_order_relaxed));
+    }
+
+    inline explicit lowres_clock_impl(private_token) {
+        update();
+
+        _timer.set_callback(&lowres_clock_impl::update);
+        _timer.arm_periodic(_granularity);
+    }
+
+    // For construction.
+    friend class smp;
+
+private:
+    // The timer updates the counters with this period.
+    static constexpr auto _granularity = std::chrono::milliseconds(10);
+
+    //
+    // Both counters are updated by CPU0 and read by other CPUs. Make them on their own
     // cache line to avoid false sharing.
-    static std::atomic<rep> _now [[gnu::aligned(64)]];
-    // High resolution timer to drive this low resolution clock
-    timer<> _timer;
-    // High resolution timer expires every 10 milliseconds
-    static constexpr std::chrono::milliseconds _granularity{10};
+    //
+
+    alignas(64) static std::atomic<system_rep> _system_count;
+    static std::atomic<steady_rep> _steady_count;
+
+    // High-resolution timer to update the lower-resolution counts.
+    timer<> _timer{};
+
+private:
+    inline static void update() {
+        auto const system_count = system_clock::now().time_since_epoch().count();
+        auto const steady_count = steady_clock::now().time_since_epoch().count();
+
+        _system_count.store(system_count, std::memory_order_relaxed);
+        _steady_count.store(steady_count, std::memory_order_relaxed);
+    }
+
+    template<class TimePoint, class BaseClock>
+    static TimePoint convert_count_to_time_point(typename BaseClock::rep count) {
+        return TimePoint(
+                std::chrono::duration_cast<typename TimePoint::duration>(
+                        typename BaseClock::duration(count)));
+    }
+};
+
+///
+/// \brief Low-resolution and efficient steady clock.
+///
+class lowres_clock final {
+public:
+    using rep = typename lowres_clock_impl::steady_rep;
+    using period = std::ratio<1, 1000>;
+    using duration = std::chrono::duration<rep, period>;
+    using time_point = std::chrono::time_point<lowres_clock, duration>;
+
+    static constexpr bool is_steady = true;
+
+    inline static time_point now() {
+        return lowres_clock_impl::steady_now<time_point>();
+    }
+
+    lowres_clock() = delete;
+};
+
+///
+/// \brief Low-resolution and efficient system clock.
+///
+class lowres_system_clock final {
+public:
+    using rep = typename lowres_clock_impl::system_rep;
+    using period = std::ratio<1, 1000>;
+    using duration = std::chrono::duration<rep, period>;
+    using time_point = std::chrono::time_point<lowres_system_clock, duration>;
+
+    constexpr static bool is_steady = false;
+
+    inline static time_point now() {
+        return lowres_clock_impl::system_now<time_point>();
+    }
+
+    //
+    // We assume that `std::chrono::system_clock` time points are relative to the Unix time epoch. This is not
+    // technically standardized, but it's a defacto convention.
+    //
+
+    inline static std::time_t to_time_t(time_point t) {
+        return std::chrono::duration_cast<std::chrono::seconds>(t.time_since_epoch()).count();
+    }
+
+    inline static time_point from_time_t(std::time_t t) {
+        return time_point(std::chrono::duration_cast<duration>(std::chrono::seconds(t)));
+    }
+
+    lowres_system_clock() = delete;
 };
 
 }
-
