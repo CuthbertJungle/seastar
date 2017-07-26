@@ -25,6 +25,7 @@
 #include "core/metrics_api.hh"
 #include <boost/program_options.hpp>
 #include "core/print.hh"
+#include "util/log-cli.hh"
 #include <boost/program_options.hpp>
 #include <boost/make_shared.hpp>
 #include <fstream>
@@ -44,6 +45,10 @@ app_template::app_template(app_template::config cfg)
         _opts.add(seastar::metrics::get_options_description());
         _opts.add(smp::get_options_description());
         _opts.add(scollectd::get_options_description());
+
+        if (_cfg.logging_cli_options) {
+            _opts.add(log_cli::get_options_description());
+        }
 }
 
 boost::program_options::options_description_easy_init
@@ -118,10 +123,17 @@ app_template::run_deprecated(int ac, char ** av, std::function<void ()>&& func) 
         std::cout << _opts << "\n";
         return 1;
     }
+    if (configuration.count("help-loggers") && configuration["help-loggers"].as<bool>()) {
+        log_cli::print_available_loggers(std::cout);
+        return 1;
+    }
 
     bpo::notify(configuration);
     configuration.emplace("argv0", boost::program_options::variable_value(std::string(av[0]), false));
     smp::configure(configuration);
+    if (_cfg.logging_cli_options) {
+        log_cli::configure(configuration);
+    }
     _configuration = {std::move(configuration)};
     engine().when_started().then([this] {
         seastar::metrics::configure(this->configuration()).then([this] {

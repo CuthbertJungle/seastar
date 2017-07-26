@@ -26,6 +26,7 @@
 #include <functional>
 #include <core/future.hh>
 #include <core/sstring.hh>
+#include <util/log.hh>
 #include <chrono>
 
 namespace seastar {
@@ -35,6 +36,8 @@ public:
     struct config {
         sstring name = "App";
         std::chrono::duration<double> default_task_quota = std::chrono::milliseconds(2);
+        // TODO(jhaberku): Will be enabled by default in a future version.
+        bool logging_cli_options = false;
         config() {}
     };
 private:
