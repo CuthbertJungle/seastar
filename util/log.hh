@@ -280,7 +280,7 @@ sstring pretty_type_name(const std::type_info&);
 
 sstring level_name(log_level level);
 
-log_registry& logger_registry();
+log_registry& global_log_registry();
 
 template <typename T>
 class logger_for : public logger {
