@@ -69,15 +69,15 @@ std::atomic<bool> logger::_stdout = { true };
 std::atomic<bool> logger::_syslog = { false };
 
 logger::logger(sstring name) : _name(std::move(name)) {
-    logger_registry().register_logger(this);
+    global_log_registry().register_logger(this);
 }
 
 logger::logger(logger&& x) : _name(std::move(x._name)), _level(x._level.load(std::memory_order_relaxed)) {
-    logger_registry().moved(&x, this);
+    global_log_registry().moved(&x, this);
 }
 
 logger::~logger() {
-    logger_registry().unregister_logger(this);
+    global_log_registry().unregister_logger(this);
 }
 
 void
@@ -230,7 +230,7 @@ sstring pretty_type_name(const std::type_info& ti) {
     return result.get() ? result.get() : ti.name();
 }
 
-log_registry& logger_registry() {
+log_registry& global_log_registry() {
     static log_registry g_registry;
     return g_registry;
 }
