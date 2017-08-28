@@ -170,4 +170,27 @@ void tuple_for_each(std::tuple<Elements...>&& t, Function&& f) {
 
 /// @}
 
+/// Generate a tuple based on a compile-time integral sequence.
+///
+/// Each element of the tuple results from applying the function to an integer in the sequence.
+///
+template <typename N, N... Is, typename Function>
+constexpr auto tuple_generate_from_integers(std::integer_sequence<N, Is...>, Function&&f ) {
+    // To ensure that tuple is constructed in the correct order (because the evaluation order of the arguments to
+    // `std::make_tuple` is unspecified), use braced initialization  (which does define the order). However, we still
+    // need to figure out the type.
+    using result_type = decltype(std::make_tuple(f(Is)...));
+
+    return result_type{f(Is)...};
+}
+
+/// Generate a tuple based on a compile-time index sequence.
+///
+/// Like \c tuple_generate_from_integers but for \c std::index_sequence instead of \c std::integral_sequence.
+///
+template <size_t... Is, typename Function>
+constexpr auto tuple_generate_from_indices(std::index_sequence<Is...> s, Function&& f) {
+    return tuple_generate_from_integers<size_t>(std::move(s), std::forward<Function>(f));
+}
+
 }
