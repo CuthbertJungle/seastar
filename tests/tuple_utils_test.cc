@@ -25,6 +25,8 @@
 
 #include <boost/test/included/unit_test.hpp>
 
+#include <sstream>
+
 using namespace seastar;
 
 
@@ -42,4 +44,70 @@ BOOST_AUTO_TEST_CASE(generate_from_indices) {
     });
 
     BOOST_REQUIRE(odds == std::make_tuple(1u, 3u, 5u, 7u, 9u));
+}
+
+BOOST_AUTO_TEST_CASE(map) {
+    const auto pairs = tuple_map(std::make_tuple(10, 5.5, true), [](auto&& e) { return std::make_tuple(e, e); });
+
+    BOOST_REQUIRE(pairs == std::make_tuple(std::make_tuple(10, 10),
+                                           std::make_tuple(5.5, 5.5),
+                                           std::make_tuple(true, true)));
+}
+
+BOOST_AUTO_TEST_CASE(for_each) {
+    std::ostringstream os;
+
+    tuple_for_each(std::make_tuple('a', 10, false, 5.4), [&os](auto&& e) {
+        os << e;
+    });
+
+    BOOST_REQUIRE_EQUAL(os.str(), "a1005.4");
+}
+
+namespace {
+
+template <typename T>
+struct transform_type final {
+    using type = T;
+};
+
+template <>
+struct transform_type<bool> final { using type = int; };
+
+template <>
+struct transform_type<double> final { using type = char; };
+
+}
+
+BOOST_AUTO_TEST_CASE(map_types) {
+    using before_tuple = std::tuple<double, bool, const char*>;
+    using after_tuple = typename tuple_map_types<transform_type, before_tuple>::type;
+
+    after_tuple t{'a', 10, "Tuple!"};
+    (void)t;
+}
+
+namespace {
+
+//
+// Strip all `bool` fields.
+//
+
+template <typename>
+struct keep_type final {
+    static constexpr auto value = true;
+};
+
+template <>
+struct keep_type<bool> final {
+    static constexpr auto value = false;
+};
+
+}
+
+BOOST_AUTO_TEST_CASE(filter_by_type) {
+    using before_tuple = std::tuple<bool, int, bool, double, bool, char>;
+
+    const auto t = tuple_filter_by_type<keep_type>(before_tuple{true, 10, false, 5.5, true, 'a'});
+    BOOST_REQUIRE(t == std::make_tuple(10, 5.5, 'a'));
 }
